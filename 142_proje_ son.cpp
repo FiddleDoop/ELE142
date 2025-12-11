@@ -1,7 +1,7 @@
 #include "canvas.cpp"
 #include <cmath>
 #include <iostream>
-//#include "gravity.cpp"
+
 
 const double G = 1.0;//global olarak G değeri 1 alınması için bu şekilde seçildi değer
 const double timestep = 0.05; // dt^2 << 1 kuralına uygun seçildi 
@@ -12,10 +12,10 @@ class vector {
 public:
     vector(double, double);
     vector();
-    // Erişimciler (Encapsulation gereği)
+    
     double getX() const;
     double getY() const;
-    // Operatör Aşırı Yükleme (Referans kullanarak performans artışı )
+    
     vector operator+(const vector &v) const;
     vector operator-(const vector &v) const;
     vector operator*(double k) const;
@@ -59,15 +59,14 @@ vector vector::unit() const{//vektörün normalize edilmesini sağlayan kısım
 }
 
 
-// PDF Kaynak [55, 56]: Kütle, hız, konum tutulmalı. Update fonksiyonu olmalı.
 class Body {
 public:
     Body(double m, const vector &p, const vector &v);
-    // Sanal Yıkıcı (Virtual Destructor) - Kalıtım kullanılan sınıflarda bellek sızıntısını önlemek için şarttır.
+    // sanal yıkıcı kalıtım kullanılan sınıflarda bellek sızıntısını önlemek için oluştuuruldu
     virtual ~Body() {}//sanal olmasaydı türetilen sınıfın yıkıcı fonksiyonu çağırılamazdı ve türetilen sınıftan olan nesneler de silinmek istediği zaman sadece temel sınıf silinirdi
 
-    // PDF Kaynak [56]: Bileşke kuvveti alıp hız ve konumu güncelleyen fonksiyon.
-    // Taylor serisi yaklaşımı (Eq.3 ve Eq.4)
+    //bileşke kuvveti alıp hız ve konumu güncelleyen fonksiyon.
+    //taylor serisi yaklaşımı 
     virtual void update(const vector &force);
     // Erişimciler
     vector getPos() const;
@@ -82,7 +81,7 @@ protected:
 Body::Body(double m, const vector &p, const vector &v): mass(m), pos(p), vel(v) {}
 void Body::update(const vector &force){
     if(mass <= 0){
-        return;//kod void olsa bile buradaki return kendinden sonra gelen satırların çalışmasını engeller
+        return;//kod void olsa bile buradaki return kendinden sonra gelen satırların çalışmasını engellemektedir
     }
     vector ivme = force/mass; // a = F/m
     vel = vel + ivme * timestep; // v(t+dt) 
@@ -99,13 +98,12 @@ vector Body::getMomentum() const {
 }
 
 
-// --- roket SINIFI ---
-// PDF Kaynak [35, 57, 59]: Body'den türetilmeli, ek itki ve kütle değişimi eklenmeli.
+
 class roket : public Body {//Body'den türetilen roket sınıfı
     //direkt olarak body sınıfından vector özelliklerini aldı miras olarak    
 public:
     roket(double m, const vector &p, const vector &v, const vector &ve, double we);
-    // PDF Kaynak [58, 59]: Temel update fonksiyonu ezilmeli (override).
+    //update fonksiyonu yazıdırıldı
     void update(const vector &force);
 private:
     vector v_exhaust;   // Egzoz gazı hızı (v_p)
@@ -118,12 +116,12 @@ roket::roket(double m,const vector &p, const vector &v,const vector &ve,double w
 :Body(m,p,v),v_exhaust(ve),w_exhaust(we){}
 
 void roket::update(const vector &force){
-        // PDF Eq.5: F_R = -w_p * v_p
+    
         // Bu kuvvet, kütle çekim kuvvetine (force parametresi) eklenir.
         vector thrust = v_exhaust * (-w_exhaust); 
         vector totalForce = force + thrust;
 
-        // İvme hesabı (Newton 2. Yasa)
+        // İvme hesabı
         // roket kütlesi anlık olarak değiştiği için anlık kütle kullanılır.
         if (mass > 0) {
             vector ivme = totalForce / mass;
@@ -131,11 +129,11 @@ void roket::update(const vector &force){
             pos = pos + vel * timestep;
         }
 
-        // PDF Eq.6: Kütle değişimi m(t+dt) = m(t) - w_p * dt
+        // kütle değişimi m(t+dt) = m(t) - w_p * dt
         mass = mass - (w_exhaust * timestep);
 
-        // PDF Kaynak [47]: Kütle sıfırın altına düşemez (yakıt bitti/boş ağırlık).
-        // Basitlik adına minimum 1 birim kütle kaldığını varsayıyoruz.
+        // kütlenin 0'ın altına düşmesinin engellenmesi
+        // hesabı basit olsun diye 1 alındı
         if (mass < 1.0) {
             mass = 1.0;
             w_exhaust = 0; // Yakıt bittiği için artık itki yok.
@@ -146,8 +144,8 @@ void roket::update(const vector &force){
 
 
 
-// --- BAĞLI LİSTE YAPISI ---
-// PDF Kaynak [66, 67, 69]: std::vector yasak, kendi bağlı listemiz olmalı.
+
+
 struct Node {
     Body* body;
     Node* next;
@@ -162,8 +160,18 @@ private:
 public:
     LinkedList() : head(nullptr) {}
 
-    // PDF Kaynak [138]: Bellek sızıntısını önlemek için yıkıcı metod.
-    ~LinkedList() {//silinirken boşta düğüm kalmasın diye sadece en baştaki düğüm kalacak şekilde kendinden sonra gelecek düğümlerin silinmesi
+    
+    ~LinkedList();
+
+    void insert(Body* b);
+
+    Node* getListFirst() const;
+};
+Node* LinkedList::getListFirst() const { 
+    return head; 
+}
+
+LinkedList::~LinkedList(){//silinirken boşta düğüm kalmasın diye sadece en baştaki düğüm kalacak şekilde kendinden sonra gelecek düğümlerin silinmesi
         Node* current = head;
         while (current != nullptr) {
             Node* nextNode = current->next;
@@ -173,17 +181,18 @@ public:
         }
     }
 
-    void insert(Body* b) {
+void LinkedList::insert(Body *b) {
         Node* newNode = new Node(b);
-        newNode->next = head;
-        head = newNode;
+        if (head == nullptr) {
+            head = newNode;
+        } else {
+            Node* temp = head;
+            while (temp->next != nullptr) {
+                temp = temp->next;
+            }
+            temp->next = newNode;
+        }
     }
-
-    Node* getListFirst() const { return head; }
-};
-
-// --- UNIVERSE (EVREN) SINIFI ---
-// PDF Kaynak [70, 71, 72]: Etkileşimleri yöneten sınıf.
 class evren {
 private:
     LinkedList bodies;
